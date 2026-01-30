@@ -61,12 +61,13 @@ def get_ics_string(calendar):
 # --- ОСНОВНАЯ ЛОГИКА ---
 group_name = st.text_input("Номер группы (как на сайте rasp.rea.ru):", value="15.27д-э01/24б")
 
+# Кнопка запускает парсинг
 if st.button("🚀 Получить расписание"):
     if not group_name:
         st.error("Пожалуйста, введите номер группы!")
     else:
-        status_text = st.empty() # Место для текста статуса
-        progress_bar = st.progress(0) # Прогресс бар
+        status_text = st.empty() 
+        progress_bar = st.progress(0)
         
         try:
             # 1. ПАРСИНГ
@@ -79,14 +80,14 @@ if st.button("🚀 Получить расписание"):
             }
             params = {'selection': group_name, 'weekNum': '-1', 'catfilter': '0'}
 
-            # Первый запрос, чтобы узнать текущую неделю
+            # Узнаем номер недели
             response = requests.get('https://rasp.rea.ru/Schedule/ScheduleCard', params=params, headers=headers)
             soup = BeautifulSoup(response.text, 'html.parser')
             
             try:
                 week_input = soup.find('input', id='weekNum')
                 if not week_input:
-                    st.error("Группа не найдена или сайт РЭУ изменил структуру. Проверьте номер группы.")
+                    st.error("Группа не найдена. Проверьте номер.")
                     st.stop()
                 start_week = int(week_input['value'])
             except Exception as e:
@@ -94,19 +95,17 @@ if st.button("🚀 Получить расписание"):
                 st.stop()
 
             raw_data = []
-            end_week = 46 # Конец семестра (примерно)
+            end_week = 26 # Конец семестра
             total_weeks = end_week - start_week + 1
             
-            # Цикл по неделям
+            # Сканируем недели
             for i, week in enumerate(range(start_week, end_week)):
-                # Обновляем прогресс
                 progress = (i + 1) / total_weeks
                 progress_bar.progress(min(progress, 1.0))
                 status_text.text(f"Сканирую неделю {week} из {end_week}...")
                 
-                # Запрос расписания на неделю
                 params['weekNum'] = week
-                if week != start_week: # Первый раз мы уже скачали выше
+                if week != start_week:
                     response = requests.get('https://rasp.rea.ru/Schedule/ScheduleCard', params=params, headers=headers)
                     soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -118,17 +117,15 @@ if st.button("🚀 Получить расписание"):
                         date = raw_text[1]
                         slot = raw_text[3]
                         
-                        # Чистим текст
                         additional_data = " ".join(lesson.get_text(separator="|", strip=True).split())
                         parts = additional_data.split("|")
                         
-                        # Иногда бывает меньше элементов, ставим заглушки
                         subj_name = parts[0] if len(parts) > 0 else "Нет названия"
                         subj_type = parts[1] if len(parts) > 1 else ""
                         location = parts[4] if len(parts) > 4 else ""
                         location = location.replace(" , пл. Основная", "")
 
-                        # Запрос имени преподавателя
+                        # Имя преподавателя
                         det_params = {'selection': group_name, 'date': date, 'timeSlot': slot}
                         det_resp = requests.get('https://rasp.rea.ru/Schedule/GetDetails', params=det_params, headers=headers)
                         det_soup = BeautifulSoup(det_resp.text, 'html.parser')
@@ -149,13 +146,10 @@ if st.button("🚀 Получить расписание"):
                             "teacher": teacher_name
                         })
                     except Exception:
-                        continue # Если одна пара сломалась, идем дальше
-                
-                # Небольшая пауза, чтобы не дудосить сайт
-                time.sleep(0.1)
+                        continue
 
             # 2. ГЕНЕРАЦИЯ КАЛЕНДАРЕЙ
-            status_text.text("Генерирую файлы календаря...")
+            status_text.text("Генерирую файлы...")
             
             cal_exams = Calendar()
             cal_lectures = Calendar()
@@ -166,7 +160,6 @@ if st.button("🚀 Получить расписание"):
                 event = create_event(item, item['date'])
                 if not event:
                     continue
-                
                 l_type = item['type'].lower()
                 
                 if any(x in l_type for x in ["экзамен", "зачет", "консультаци", "диф. зачет"]):
@@ -178,35 +171,81 @@ if st.button("🚀 Получить расписание"):
                 count += 1
             
             progress_bar.progress(100)
-            status_text.text("✅ Готово!")
-            st.success(f"Обработано пар: {count}")
+            status_text.success(f"✅ Готово! Найдено пар: {count}")
 
-            # 3. КНОПКИ СКАЧИВАНИЯ
-            col1, col2, col3 = st.columns(3)
+            # === ГЛАВНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ ===
+            # Сохраняем готовые файлы в память (session_state)
+            st.session_state['exams_ics'] = get_ics_string(cal_exams)
+            st.session_state['lectures_ics'] = get_ics_string(cal_lectures)
+            st.session_state['seminars_ics'] = get_ics_string(cal_seminars)
+            st.session_state['data_loaded'] = True
             
-            with col1:
-                st.download_button(
-                    label="🔴 Скачать Экзамены",
-                    data=get_ics_string(cal_exams),
-                    file_name="reu_exams.ics",
-                    mime="text/calendar"
-                )
-            
-            with col2:
-                st.download_button(
-                    label="🔵 Скачать Лекции",
-                    data=get_ics_string(cal_lectures),
-                    file_name="reu_lectures.ics",
-                    mime="text/calendar"
-                )
-                
-            with col3:
-                st.download_button(
-                    label="🟢 Скачать Семинары",
-                    data=get_ics_string(cal_seminars),
-                    file_name="reu_seminars.ics",
-                    mime="text/calendar"
-                )
-
         except Exception as e:
             st.error(f"Произошла ошибка: {e}")
+
+# --- ОТОБРАЖЕНИЕ КНОПОК ---
+# Этот блок кода теперь находится СНАРУЖИ кнопки "Получить расписание".
+# Он проверяет: "А есть ли у нас сохраненные данные в памяти?"
+if 'data_loaded' in st.session_state and st.session_state['data_loaded']:
+    
+    st.write("---")
+    st.subheader("📥 Скачать календари")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.download_button(
+            label="🔴 Экзамены",
+            data=st.session_state['exams_ics'],
+            file_name="reu_exams.ics",
+            mime="text/calendar"
+        )
+    
+    with col2:
+        st.download_button(
+            label="🔵 Лекции",
+            data=st.session_state['lectures_ics'],
+            file_name="reu_lectures.ics",
+            mime="text/calendar"
+        )
+        
+    with col3:
+        st.download_button(
+            label="🟢 Семинары",
+            data=st.session_state['seminars_ics'],
+            file_name="reu_seminars.ics",
+            mime="text/calendar"
+        )
+
+    # --- ИНСТРУКЦИЯ (НОВЫЙ БЛОК) ---
+    st.write("")
+    st.write("")
+    with st.expander("ℹ️ Инструкция: Как добавить в календарь?"):
+        tab1, tab2, tab3 = st.tabs(["🍏 iOS (iPhone)", "🤖 Android", "🖥 PC (Outlook)"])
+        
+        with tab1:
+            st.markdown("""
+            1. Нажмите кнопку **Скачать**.
+            2. На iPhone появится окно загрузки — нажмите на файл.
+            3. Нажмите кнопку **«Добавить все»** (Add all) в правом верхнем углу.
+            4. Готово! Расписание в вашем родном календаре.
+            """)
+            
+        with tab2:
+            st.markdown("""
+            **Способ 1 (Простой):**
+            1. Скачайте файл и откройте его.
+            2. Если телефон предложит — выберите "Google Календарь" и нажмите "Добавить".
+            
+            **Способ 2 (Если первый не сработал):**
+            1. Зайдите на сайт [calendar.google.com](https://calendar.google.com) (лучше с компьютера).
+            2. Нажмите **Настройки ⚙️** -> **Импорт и экспорт**.
+            3. Загрузите файл и нажмите **Импорт**.
+            """)
+            
+        with tab3:
+            st.markdown("""
+            1. Скачайте файл `.ics`.
+            2. Дважды кликните по нему.
+            3. Outlook (или стандартный Календарь Windows) откроется автоматически и предложит сохранить события.
+            """)
