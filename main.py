@@ -66,12 +66,15 @@ if st.button("🚀 Получить расписание"):
     if not group_name:
         st.error("Пожалуйста, введите номер группы!")
     else:
+        
         status_text = st.empty() 
         progress_bar = st.progress(0)
         
         try:
             # 1. ПАРСИНГ
             status_text.text("Подключаюсь к сайту РЭУ...")
+
+            group_name = group_name.lower()
             
             encoded_group = urllib.parse.quote(group_name, safe='')
             headers = {
@@ -251,3 +254,4 @@ if 'data_loaded' in st.session_state and st.session_state['data_loaded']:
             2. Дважды кликните по нему.
             3. Outlook (или стандартный Календарь Windows) откроется автоматически и предложит сохранить события.
             """)
+
