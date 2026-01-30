@@ -95,7 +95,7 @@ if st.button("🚀 Получить расписание"):
                 st.stop()
 
             raw_data = []
-            end_week = 26 # Конец семестра
+            end_week = 46 # Конец семестра
             total_weeks = end_week - start_week + 1
             
             # Сканируем недели
@@ -147,6 +147,8 @@ if st.button("🚀 Получить расписание"):
                         })
                     except Exception:
                         continue
+                    
+            print(f"📝 КТО-ТО СКАЧАЛ РАСПИСАНИЕ: Группа {group_name}")
 
             # 2. ГЕНЕРАЦИЯ КАЛЕНДАРЕЙ
             status_text.text("Генерирую файлы...")
