@@ -125,7 +125,7 @@ if st.button("🚀 Получить расписание"):
                         
                         subj_name = parts[0] if len(parts) > 0 else "Нет названия"
                         subj_type = parts[1] if len(parts) > 1 else ""
-                        location = parts[4] if len(parts) > 4 else ""
+                        location = parts[4] if len(parts) > 2 else ""
                         location = location.replace(" , пл. Основная", "")
 
                         # Имя преподавателя
@@ -254,4 +254,5 @@ if 'data_loaded' in st.session_state and st.session_state['data_loaded']:
             2. Дважды кликните по нему.
             3. Outlook (или стандартный Календарь Windows) откроется автоматически и предложит сохранить события.
             """)
+
 
